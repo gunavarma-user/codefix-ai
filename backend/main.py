@@ -16,12 +16,12 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import func, desc
 
-from backend.database import engine, get_db, init_db
-import backend.models as models
-import backend.schemas as schemas
-from backend.analyzer import perform_static_check
-from backend.ai_service import analyze_code_with_gemini, generate_chat_reply
-from backend.auth import (
+from database import engine, get_db, init_db
+import models as models
+import schemas as schemas
+from analyzer import perform_static_check
+from ai_service import analyze_code_with_gemini, generate_chat_reply
+from auth import (
     hash_password,
     verify_password,
     create_access_token,
