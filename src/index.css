@@ -1,0 +1,74 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --bg-primary: #0b0f1a;
+    --bg-surface: #0f172a;
+    --bg-elevated: #131b2e;
+    --bg-card: #0e1526;
+    --border-subtle: #1e293b;
+    --border-active: #334155;
+    --accent-emerald: #10b981;
+    --accent-teal: #06b6d4;
+    --color-error: #ef4444;
+    --color-warning: #f59e0b;
+    --color-success: #10b981;
+    --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+    --font-sans: 'Plus Jakarta Sans', system-ui, sans-serif;
+  }
+
+  body {
+    font-family: var(--font-sans);
+    background-color: var(--bg-primary);
+    color: #cbd5e1;
+    overflow-x: hidden;
+  }
+
+  code, pre, .font-mono {
+    font-family: var(--font-mono);
+  }
+}
+
+/* Custom High Density modern scrollbar */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0b0f1a;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #1e293b;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #334155;
+}
+
+.monaco-editor, .monaco-editor .margin, .monaco-editor-background {
+  background-color: #0b0f1a !important;
+}
+
+.line-error-highlight {
+  background-color: rgba(239, 68, 68, 0.18) !important;
+  border-left: 3px solid #ef4444 !important;
+}
+
+.line-warning-highlight {
+  background-color: rgba(245, 158, 11, 0.15) !important;
+  border-left: 3px solid #f59e0b !important;
+}
+
+.line-suggestion-highlight {
+  background-color: rgba(56, 189, 248, 0.15) !important;
+  border-left: 3px solid #38bdf8 !important;
+}
+
+.line-success-highlight {
+  background-color: rgba(16, 185, 129, 0.15) !important;
+  border-left: 3px solid #10b981 !important;
+}
+

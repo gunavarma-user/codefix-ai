@@ -1,0 +1,334 @@
+{
+  "users": [
+    {
+      "id": "usr-demo-1234",
+      "username": "demo_student",
+      "email": "student@codefix.ai",
+      "passwordHash": "$2b$10$ftRDXrvnfALPtvQIuY19cuxcLuSyE8f6gyXIg45Pb7LK2oNWGocz6",
+      "createdAt": "2026-08-27T07:29:41.205Z"
+    }
+  ],
+  "analyses": [
+    {
+      "id": "anl-dzzpduvwmtfjxnsw",
+      "language": "javascript",
+      "submittedCode": "function test(a, b) {\n  const res = a + b;\n  console.log(undefinedVar);\n  return res;\n}",
+      "hasError": true,
+      "errorType": "ReferenceError",
+      "errorMessage": "undefinedVar is not defined",
+      "errorLine": 3,
+      "offendingCode": "console.log(undefinedVar);",
+      "explanation": "The variable 'undefinedVar' is being accessed but does not exist in the scope.",
+      "whyItHappened": "The variable was never declared in the function or global scope.",
+      "howToFix": "Declare the variable 'undefinedVar' or remove the console.log statement.",
+      "correctedCode": "function test(a, b) {\n  const res = a + b;\n  // console.log(res); // Use the defined variable instead\n  return res;\n}",
+      "suggestions": [
+        "Use console.log(res) to debug the result of your calculation instead of an undefined variable.",
+        "Always use 'const' for variables that do not change, and 'let' for those that do, to avoid scope-related bugs.",
+        "Consider adding JSDoc comments to your functions to document expected parameter types."
+      ],
+      "createdAt": "2026-08-30T08:32:53.696Z"
+    },
+    {
+      "id": "anl-mulkk5gxmtfjxgcb",
+      "language": "python",
+      "submittedCode": "def calculate(x, y)\n    result = x + y + z\n    items = [1, 2]\n    print(items[10])\n    return result + 100",
+      "hasError": true,
+      "errorType": "SyntaxError",
+      "errorMessage": "expected ':'",
+      "errorLine": 1,
+      "offendingCode": "def calculate(x, y)",
+      "explanation": "Python function definitions must end with a colon.",
+      "whyItHappened": "The syntax error prevents execution, the variable 'z' was never defined in the scope, and the list 'items' only has indices 0 and 1.",
+      "howToFix": "Change to 'def calculate(x, y):'",
+      "correctedCode": "def calculate(x, y, z):\n    result = x + y + z\n    items = [1, 2]\n    print(items[1])\n    return result + 100",
+      "suggestions": [
+        "Use descriptive variable names instead of single letters like 'x', 'y', and 'z'.",
+        "Always validate input data or list lengths before performing index-based operations.",
+        "Consider adding type hints to your function parameters for better code clarity."
+      ],
+      "createdAt": "2026-08-30T08:32:44.027Z"
+    },
+    {
+      "id": "anl-o7h35ce0mtfjx6qu",
+      "language": "python",
+      "submittedCode": "def add(a, b):\n    \"\"\"Add two numbers and return the sum.\"\"\"\n    return a + b",
+      "hasError": false,
+      "errorType": "No Error",
+      "errorMessage": "No major errors detected",
+      "errorLine": 1,
+      "offendingCode": "None",
+      "explanation": "The function is well-defined and includes a docstring.",
+      "whyItHappened": "N/A",
+      "howToFix": "N/A",
+      "correctedCode": "def add(a, b):\n    \"\"\"Add two numbers and return the sum.\"\"\"\n    return a + b",
+      "suggestions": [
+        "Consider adding type hints to your function signature, e.g., 'def add(a: int, b: int) -> int:', to improve code clarity and IDE support.",
+        "Ensure you have test cases or a main block to verify the function works as expected.",
+        "Keep function names descriptive; 'add' is perfect, but for more complex logic, use verbs that describe the action."
+      ],
+      "createdAt": "2026-08-30T08:32:31.590Z"
+    },
+    {
+      "id": "anl-q13m5xr5mtfjwdqc",
+      "language": "python",
+      "submittedCode": "def greet(\n    print(\"hello\")",
+      "hasError": true,
+      "errorType": "SyntaxError",
+      "errorMessage": "unexpected EOF while parsing",
+      "errorLine": 1,
+      "offendingCode": "def greet(",
+      "explanation": "The function definition header is missing a closing parenthesis and a colon.",
+      "whyItHappened": "Python syntax requires 'def function_name():' to define a function. You started the definition but did not complete the syntax structure.",
+      "howToFix": "Add a closing parenthesis after the function name and a colon to define the function block.",
+      "correctedCode": "def greet():\n    print(\"hello\")\n\n# Call the function to see the result\ngreet()",
+      "suggestions": [
+        "Always ensure your function definitions end with a colon.",
+        "Use consistent indentation (4 spaces) for code inside functions.",
+        "Test your functions by calling them after defining them."
+      ],
+      "createdAt": "2026-08-30T08:31:53.988Z"
+    },
+    {
+      "id": "anl-ypwk59kmmtfjmhtk",
+      "language": "python",
+      "submittedCode": "marks = 40\n\nif marks > 35:\n    print(\"Fail\")\nelse:\n    print(\"Pass\")",
+      "hasError": true,
+      "errorType": "Logical Error",
+      "errorMessage": "The condition prints 'Fail' when marks are greater than 35, which is reversed.",
+      "errorLine": 3,
+      "offendingCode": "if marks > 35:\n    print(\"Fail\")",
+      "explanation": "Your code runs without crashing, but it gives the wrong output! Right now, if a student gets 40 marks (which is greater than 35), the code prints 'Fail' instead of 'Pass'.",
+      "whyItHappened": "The logic in the condition and the print messages are inverted. Usually, scoring higher than the passing mark means you pass.",
+      "howToFix": "Swap the 'Pass' and 'Fail' messages so that scoring greater than or equal to 35 prints 'Pass'.",
+      "correctedCode": "marks = 40\n\nif marks >= 35:\n    print(\"Pass\")\nelse:\n    print(\"Fail\")",
+      "suggestions": [
+        "Test your code with different numbers (e.g., 20, 35, 50) to make sure the output makes sense in all cases.",
+        "Use standard threshold operators like `>=` when including the passing grade itself.",
+        "Read your `if` condition out loud like a sentence to double-check its logic before writing the `print` statements."
+      ],
+      "createdAt": "2026-08-30T08:24:12.728Z"
+    },
+    {
+      "id": "anl-s05v20eumtfjm1x3",
+      "language": "python",
+      "submittedCode": "numbers = [10, 20, 30]\nprint(numbers[5])",
+      "hasError": true,
+      "errorType": "Runtime Error",
+      "errorMessage": "IndexError: list index out of range",
+      "errorLine": 2,
+      "offendingCode": "print(numbers[5])",
+      "explanation": "You are trying to access index 5 of the 'numbers' list, but the list only contains 3 items (at indices 0, 1, and 2).",
+      "whyItHappened": "Python uses zero-based indexing. The first item is at index 0, the second is at index 1, and the third is at index 2. Asking for index 5 causes Python to look beyond the end of the list, resulting in a runtime IndexError.",
+      "howToFix": "Use a valid index within the list's range (0, 1, or 2), or make sure the list has enough elements before accessing higher indices.",
+      "correctedCode": "numbers = [10, 20, 30]\nprint(numbers[2])",
+      "suggestions": [
+        "Remember that Python lists start counting at index 0, so the last element in a 3-item list is at index 2.",
+        "Use len(your_list) to check the size of a list before trying to access a specific position.",
+        "Use negative indexing like numbers[-1] if you want to access the last element safely."
+      ],
+      "createdAt": "2026-08-30T08:23:52.119Z"
+    },
+    {
+      "id": "anl-kfuuhvcdmtfjlgw5",
+      "language": "python",
+      "submittedCode": "age = 20\nprint(\"Age: \" + age)",
+      "hasError": true,
+      "errorType": "Runtime Error",
+      "errorMessage": "TypeError: can only concatenate str (not \"int\") to str",
+      "errorLine": 2,
+      "offendingCode": "print(\"Age: \" + age)",
+      "explanation": "You are trying to join a text string (\"Age: \") with an integer variable (age) using the '+' sign. Python cannot automatically join text and numbers together this way.",
+      "whyItHappened": " In Python, the '+' operator is used to add numbers together or join strings together. When you mix a string and an integer, Python does not automatically convert the number into text, causing a TypeError at runtime.",
+      "howToFix": "You can fix this by using an f-string, converting the integer to a string with str(age), or passing both items into print() separated by a comma.",
+      "correctedCode": "age = 20\nprint(f\"Age: {age}\")",
+      "suggestions": [
+        "Use f-strings (e.g., f\"Age: {age}\") for clean and readable text formatting.",
+        "Use commas in print() statements like print(\"Age:\", age), which automatically handles spaces and conversion.",
+        "Use the type() function if you ever need to double-check what data type a variable holds."
+      ],
+      "createdAt": "2026-08-30T08:23:24.869Z"
+    },
+    {
+      "id": "anl-o7cmrsh9mtfjkpsg",
+      "language": "python",
+      "submittedCode": "name = \"Guna\"\nprint(nam)",
+      "hasError": true,
+      "errorType": "Runtime Error",
+      "errorMessage": "NameError: name 'nam' is not defined",
+      "errorLine": 2,
+      "offendingCode": "print(nam)",
+      "explanation": "Python tried to print the variable 'nam', but you defined your variable as 'name' on line 1. Variable names must match their definition exactly.",
+      "whyItHappened": "When Python runs line 2, it searches its memory for a variable named 'nam'. Since it cannot find one with that exact spelling, it stops and reports a NameError.",
+      "howToFix": "Fix the spelling inside the print function so it matches the variable name 'name'.",
+      "correctedCode": "name = \"Guna\"\nprint(name)",
+      "suggestions": [
+        "Double-check the spelling of variable names if you get a NameError.",
+        "Use a code editor with autocomplete features to help avoid typos.",
+        "Remember that Python variable names are case-sensitive and must match perfectly."
+      ],
+      "createdAt": "2026-08-30T08:22:49.744Z"
+    },
+    {
+      "id": "anl-dyzmm1qpmtfjivzl",
+      "language": "python",
+      "submittedCode": "x = 10\n\nif x > 5\n    print(\"Hello\")",
+      "hasError": true,
+      "errorType": "Syntax Error",
+      "errorMessage": "Missing colon at the end of the 'if' statement",
+      "errorLine": 3,
+      "offendingCode": "if x > 5",
+      "explanation": "In Python, whenever you write a conditional statement like 'if', you need to place a colon (:) at the end of that line to let Python know that an indented block of code is coming next.",
+      "whyItHappened": "Python's syntax rules require a colon after control flow statements (like if, else, for, while, def) to signal the start of a new code block.",
+      "howToFix": "Add a colon (:) at the end of line 3 right after 'x > 5'.",
+      "correctedCode": "x = 10\n\nif x > 5:\n    print(\"Hello\")",
+      "suggestions": [
+        "Always remember to put a colon (:) at the end of lines starting with 'if', 'elif', 'else', 'for', or 'while'.",
+        "Look out for red squiggly lines in your code editor—they often highlight missing colons instantly.",
+        "Make sure the code inside your 'if' block stays indented by 4 spaces."
+      ],
+      "createdAt": "2026-08-30T08:21:24.465Z"
+    },
+    {
+      "id": "anl-pyddwn6fmtfji02m",
+      "language": "python",
+      "submittedCode": "x = 10\n\nif x > 5\n    print(\"Hello\")",
+      "hasError": true,
+      "errorType": "Syntax Error",
+      "errorMessage": "Missing colon at the end of the 'if' statement",
+      "errorLine": 3,
+      "offendingCode": "if x > 5",
+      "explanation": "In Python, conditional statements like 'if' require a colon at the end of the line to show where the code block starts.",
+      "whyItHappened": "Python relies on the colon symbol (:) to know that an indented block of code will follow next.",
+      "howToFix": "Add a colon (:) at the very end of line 3 after '5'.",
+      "correctedCode": "x = 10\n\nif x > 5:\n    print(\"Hello\")",
+      "suggestions": [
+        "Always remember to add a colon (:) at the end of header lines like 'if', 'else', 'for', 'while', and 'def'.",
+        "Use a code editor with Python syntax highlighting to help you spot missing colons automatically.",
+        "Test your code frequently so you can catch small syntax mistakes early."
+      ],
+      "createdAt": "2026-08-30T08:20:43.102Z"
+    },
+    {
+      "id": "anl-8yu515memtfjhg5e",
+      "language": "python",
+      "submittedCode": "x = 10\n\nif x > 5\n    print(\"Hello\")",
+      "hasError": true,
+      "errorType": "Syntax Error",
+      "errorMessage": "Missing colon (:) at the end of the 'if' statement.",
+      "errorLine": 3,
+      "offendingCode": "if x > 5",
+      "explanation": "In Python, header lines like 'if' statements need a colon (:) at the end to show that a new block of code is starting.",
+      "whyItHappened": "Python syntax rules require a colon after conditional statements so the interpreter knows where the condition ends and the indented block begins.",
+      "howToFix": "Add a colon (:) at the end of line 3 right after 'x > 5'.",
+      "correctedCode": "x = 10\n\nif x > 5:\n    print(\"Hello\")",
+      "suggestions": [
+        "Remember that block headers in Python (if, elif, else, for, while, def) always end with a colon.",
+        "Pay attention to error messages in the output console; they often point directly to missing punctuation.",
+        "Use a code editor with syntax highlighting to catch missing colons automatically as you type."
+      ],
+      "createdAt": "2026-08-30T08:20:17.282Z"
+    },
+    {
+      "id": "anl-zql4o5vhmtfix3k0",
+      "language": "python",
+      "submittedCode": "x = 10\n\nif x > 5:\n    print(\"Hello\")",
+      "hasError": false,
+      "errorType": "No Error",
+      "errorMessage": "No major errors detected",
+      "errorLine": null,
+      "offendingCode": "",
+      "explanation": "Your code is completely correct! It creates a variable named 'x' with the value 10, then checks if 'x' is greater than 5. Since 10 is greater than 5, it successfully prints 'Hello'.",
+      "whyItHappened": "The syntax and structure follow proper language conventions.",
+      "howToFix": "No fixes needed. Keep writing clean code!",
+      "correctedCode": "x = 10\n\nif x > 5:\n    print(\"Hello\")",
+      "suggestions": [
+        "Consider adding an 'else' block if you want your program to handle cases where x is 5 or less.",
+        "Use descriptive variable names (like 'count' or 'score') as your programs get larger.",
+        "Keep up the good habit of using consistent indentation for code inside 'if' statements!"
+      ],
+      "createdAt": "2026-08-30T08:04:27.840Z"
+    },
+    {
+      "id": "anl-tuz6e5uymtfinw91",
+      "language": "python",
+      "submittedCode": "x = 10\n\nif x > 5:\n    print(\"Hello\")",
+      "hasError": false,
+      "errorType": "No Error",
+      "errorMessage": "No major errors detected",
+      "errorLine": 0,
+      "offendingCode": "",
+      "explanation": "Your code successfully defines a variable x with the value 10 and checks if it is greater than 5 using a valid if statement, printing Hello as expected.",
+      "whyItHappened": "The syntax and structure follow proper language conventions.",
+      "howToFix": "No fixes needed. Keep writing clean code!",
+      "correctedCode": "x = 10\n\nif x > 5:\n    print(\"Hello\")",
+      "suggestions": [
+        "Use descriptive variable names instead of single letters like x as your programs grow larger.",
+        "Consider adding an else block if you want your code to handle cases where x is 5 or less.",
+        "Keep up the good practice of using proper indentation for code blocks inside if statements."
+      ],
+      "createdAt": "2026-08-30T07:57:18.469Z"
+    },
+    {
+      "id": "anl-f9jb7395mtfinii8",
+      "language": "python",
+      "submittedCode": "x = 10\n\nif x > 5\n    print(\"Hello\")",
+      "hasError": true,
+      "errorType": "Syntax Error",
+      "errorMessage": "Missing colon ':' at the end of the if statement",
+      "errorLine": 3,
+      "offendingCode": "if x > 5",
+      "explanation": "In Python, conditional statements like 'if' require a colon at the end of the line to let Python know that a block of code is about to start.",
+      "whyItHappened": "Python uses the colon to mark the end of a condition and the start of an indented block of code. Without it, Python cannot parse the statement correctly.",
+      "howToFix": "Add a colon ':' at the end of line 3 so it reads 'if x > 5:'.",
+      "correctedCode": "x = 10\n\nif x > 5:\n    print(\"Hello\")",
+      "suggestions": [
+        "Always double-check that your 'if', 'elif', 'else', 'for', 'while', and 'def' lines end with a colon (:).",
+        "Keep an eye out for line numbers in Python error messages to quickly spot where punctuation is missing.",
+        "Use a code editor with syntax highlighting to catch missing colons before running your program."
+      ],
+      "createdAt": "2026-08-30T07:57:00.656Z"
+    },
+    {
+      "id": "anl-demo-1",
+      "userId": "usr-demo-1234",
+      "language": "python",
+      "submittedCode": "def add_numbers(a, b)\n    return a + b\n\nprint(add_numbers(5, 10))",
+      "hasError": true,
+      "errorType": "Syntax Error",
+      "errorMessage": "Expected ':' after function definition header",
+      "errorLine": 1,
+      "offendingCode": "def add_numbers(a, b)",
+      "explanation": "Python functions require a colon ':' at the end of the def line before starting the indented body.",
+      "whyItHappened": "The def statement was written without the terminating colon.",
+      "howToFix": "Add a colon ':' at the end of line 1: 'def add_numbers(a, b):'",
+      "correctedCode": "def add_numbers(a, b):\n    return a + b\n\nprint(add_numbers(5, 10))",
+      "suggestions": [
+        "Always check for a colon at the end of def, if, for, while, and class lines.",
+        "Use consistent 4-space indentation."
+      ],
+      "createdAt": "2026-08-29T07:29:41.205Z"
+    },
+    {
+      "id": "anl-demo-2",
+      "userId": "usr-demo-1234",
+      "language": "javascript",
+      "submittedCode": "const items = ['apple', 'orange'];\nconsole.log(items.toUppercase());",
+      "hasError": true,
+      "errorType": "Runtime Error",
+      "errorMessage": "items.toUppercase is not a function",
+      "errorLine": 2,
+      "offendingCode": "items.toUppercase()",
+      "explanation": "toUppercase() is not a method on arrays. In JavaScript, toUpperCase() is a method on strings, and case matters (capital U and C).",
+      "whyItHappened": "You called a string method on an entire array instead of individual string elements, with incorrect casing.",
+      "howToFix": "Map over the array or access an individual item: items.map(item => item.toUpperCase())",
+      "correctedCode": "const items = ['apple', 'orange'];\nconsole.log(items.map(item => item.toUpperCase()));",
+      "suggestions": [
+        "Remember that JavaScript method names are case-sensitive (toUpperCase).",
+        "Use .map() when you want to transform every item in an array."
+      ],
+      "createdAt": "2026-08-29T19:29:41.205Z"
+    }
+  ],
+  "chats": []
+}

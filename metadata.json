@@ -1,0 +1,6 @@
+{
+  "name": "CodeFix AI",
+  "description": "AI-Powered Code Error Analyzer for students and beginner programmers.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
