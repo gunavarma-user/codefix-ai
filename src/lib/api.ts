@@ -1,7 +1,9 @@
 /**
- * Safe API Fetch utility for CodeFix AI
- * Validates Content-Type, handles JSON parsing safely, and prevents HTML-as-JSON errors.
+ * CodeFix AI API utility
+ * Connects the frontend to the deployed FastAPI backend.
  */
+
+const API_BASE_URL = 'https://codefix-ai-backend-dj8o.onrender.com';
 
 export interface ApiErrorResponse {
   error?: boolean | string;
@@ -10,10 +12,15 @@ export interface ApiErrorResponse {
 }
 
 export async function safeApiFetch<T = any>(
-  url: string,
+  endpoint: string,
   options: RequestInit = {}
 ): Promise<T> {
   const token = localStorage.getItem('codefix_token');
+
+  // Allow both full URLs and relative API paths.
+  const url = endpoint.startsWith('http')
+    ? endpoint
+    : `${API_BASE_URL}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
 
   const headers: Record<string, string> = {
     Accept: 'application/json',
@@ -28,36 +35,56 @@ export async function safeApiFetch<T = any>(
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const response = await fetch(url, {
-    ...options,
-    headers
-  });
+  let response: Response;
 
-  const contentType = (response.headers.get('content-type') || '').toLowerCase();
-  const isJson = contentType.includes('application/json') || contentType.includes('+json');
+  try {
+    response = await fetch(url, {
+      ...options,
+      headers
+    });
+  } catch (error) {
+    console.error(`[API Error] Network request failed: ${url}`, error);
+    throw new Error(
+      'Unable to connect to the CodeFix AI server. Please try again.'
+    );
+  }
+
+  const contentType = (
+    response.headers.get('content-type') || ''
+  ).toLowerCase();
+
+  const isJson =
+    contentType.includes('application/json') ||
+    contentType.includes('+json');
 
   if (!isJson) {
     const rawText = await response.text().catch(() => '');
-    const isHtml = rawText.trim().startsWith('<') || contentType.includes('text/html');
+    const isHtml =
+      rawText.trim().startsWith('<') ||
+      contentType.includes('text/html');
 
     if (isHtml) {
-      console.error(`[API Error] Received HTML response from ${url} (Status ${response.status})`);
+      console.error(
+        `[API Error] Received HTML response from ${url} (${response.status})`
+      );
+
       throw new Error(
-        `Server returned an HTML response (${response.status} ${response.statusText}) instead of JSON. The endpoint may be unrouted or encountering a server error.`
+        `Server returned an HTML response (${response.status}). The API endpoint may be unavailable.`
       );
     }
 
     throw new Error(
-      `Unexpected content type (${contentType || 'empty'}) from ${url}. Expected JSON.`
+      `Unexpected server response (${contentType || 'empty'}). Expected JSON.`
     );
   }
 
   let data: any;
+
   try {
     data = await response.json();
-  } catch (parseErr: any) {
+  } catch (parseErr) {
     console.error(`[API Error] Failed to parse JSON from ${url}:`, parseErr);
-    throw new Error('Failed to parse server JSON response.');
+    throw new Error('Failed to parse the server response.');
   }
 
   if (!response.ok) {
@@ -70,6 +97,7 @@ export async function safeApiFetch<T = any>(
     const err = new Error(errorMessage);
     (err as any).status = response.status;
     (err as any).data = data;
+
     throw err;
   }
 
@@ -79,3 +107,8 @@ export async function safeApiFetch<T = any>(
 
   return data as T;
 }
+
+/**
+ * Base URL exported for components that need it.
+ */
+export { API_BASE_URL };
