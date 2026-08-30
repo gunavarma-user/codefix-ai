@@ -3,19 +3,19 @@ Gemini AI Service for CodeFix AI.
 
 Handles:
 - AI code analysis
-- Beginner-friendly tutoring
-- Gemini API communication
-- JSON response parsing
-- Temporary Gemini API failures/retries
+- Beginner-friendly explanations
+- AI tutor chat
+- Gemini API errors
+- Gemini temporary 503 errors
 """
 
-import os
 import json
+import os
 import re
 import time
-import urllib.request
 import urllib.error
-from typing import Dict, Any, List, Optional
+import urllib.request
+from typing import Any, Dict, List, Optional
 
 
 # ============================================================
@@ -24,89 +24,111 @@ from typing import Dict, Any, List, Optional
 
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 
-# Stable Gemini model suitable for high-volume text/code tasks.
-GEMINI_MODEL = "gemini-2.5-flash"
+# Use a currently supported Gemini Flash model.
+GEMINI_MODEL = os.environ.get(
+    "GEMINI_MODEL",
+    "gemini-2.5-flash"
+)
 
-GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta"
-
-
-# Temporary Gemini errors that are safe to retry.
-RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 504}
-
-# Number of attempts:
-# 1 initial attempt + 2 retries = 3 total attempts.
-MAX_RETRIES = 3
-
-# Seconds between retries.
-RETRY_DELAYS = [1, 3]
+GEMINI_API_URL = (
+    "https://generativelanguage.googleapis.com/"
+    "v1beta/models/{model}:generateContent?key={key}"
+)
 
 
 # ============================================================
-# SYSTEM PROMPT — CODE ANALYSIS
+# SYSTEM PROMPT FOR CODE ANALYSIS
 # ============================================================
 
-SYSTEM_ANALYSIS_PROMPT = """You are CodeFix AI, an expert programming tutor designed specifically for beginners and students.
+SYSTEM_ANALYSIS_PROMPT = """
+You are CodeFix AI, an expert programming tutor designed specifically
+for beginners and students.
 
-Your goal is to analyze user-submitted code in Python, C, C++, Java, or JavaScript, detect any errors, explain them in simple, friendly, jargon-free English, and provide full corrected code.
+Your job is to analyze user-submitted code written in:
+- Python
+- C
+- C++
+- Java
+- JavaScript
 
-CRITICAL INSTRUCTIONS:
+You must:
+1. Detect syntax errors.
+2. Detect likely runtime errors.
+3. Detect logical errors.
+4. Detect code quality issues.
+5. Explain problems using simple beginner-friendly English.
+6. Give the exact line number when possible.
+7. Provide complete corrected code.
+8. Give useful suggestions for improvement.
 
-1. Tone:
-   Warm, encouraging, patient programming tutor.
+IMPORTANT STYLE RULES:
 
-2. Simplicity:
-   Avoid confusing academic jargon.
-   Explain concepts using real-world analogies or simple phrasing.
+- Be warm, encouraging, and patient.
+- Avoid unnecessary academic jargon.
+- Explain concepts simply.
+- Use small examples when helpful.
+- Never blame the student.
+- Always make the correction understandable.
 
-3. Line numbers:
-   Accurately locate the line where the error or issue occurs.
-   Line numbers are 1-indexed.
-   If it is a whole-file or conceptual issue with unknown line, set line to null.
+LINE NUMBERS:
 
-4. Corrected Code:
-   Provide the COMPLETE, functional corrected version of the code.
-   The corrected code must be properly formatted and ready to run.
+Line numbers start at 1.
 
-5. If NO error is found:
-   - set "hasError": false
-   - set "errorType": "No Error"
-   - set "errorMessage": "No syntax or runtime errors detected."
-   - explain what the code does well
-   - provide 2-3 clean code quality or optimization suggestions.
+If an error is clearly associated with a particular line,
+return that line number.
 
-6. Never invent an error.
-   If the code is valid, clearly say that it is valid.
+If there is no specific line, return null.
 
-7. Return ONLY valid JSON.
-   Do not use Markdown code fences.
-   Do not add explanations outside the JSON object.
+CORRECTED CODE:
 
-You MUST reply ONLY with a single valid JSON object adhering strictly to this structure:
+Always provide the COMPLETE corrected program.
+
+If the code already works, return the original code as correctedCode.
+
+NO ERROR:
+
+If no significant error exists:
+
+hasError = false
+
+errorType = "No Error"
+
+errorMessage = "No syntax or runtime errors detected."
+
+Still provide 2-3 useful suggestions.
+
+You MUST return ONLY valid JSON.
+
+Do not use Markdown.
+Do not wrap the JSON in ```json fences.
+
+The JSON must have exactly this general structure:
 
 {
   "hasError": true,
   "errorType": "Syntax Error",
-  "line": 5,
-  "errorMessage": "Expected ':' after condition",
-  "offendingCode": "if x > 10",
-  "explanation": "Python requires a colon after an if condition to mark the start of the indented block.",
-  "whyItHappened": "The if statement was written without the required colon at the end.",
-  "howToFix": "Add ':' at the end of line 5: 'if x > 10:'.",
-  "correctedCode": "# Full corrected code here...",
+  "line": 2,
+  "errorMessage": "Expected ':' after the function definition.",
+  "offendingCode": "def hello()",
+  "explanation": "Python function definitions need a colon at the end.",
+  "whyItHappened": "The colon was missing after the closing parenthesis.",
+  "howToFix": "Add ':' after def hello().",
+  "correctedCode": "def hello():\\n    print('hello')",
   "suggestions": [
-    "Check the syntax of your if statements.",
-    "Use consistent 4-space indentation."
+    "Remember to use ':' after Python function definitions.",
+    "Use consistent indentation."
   ]
 }
 
 Allowed errorType values:
-"Syntax Error",
-"Runtime Error",
-"Logical Error",
-"Warning",
-"Code Quality Issue",
-"Optimization Suggestion",
-"No Error".
+
+"Syntax Error"
+"Runtime Error"
+"Logical Error"
+"Warning"
+"Code Quality Issue"
+"Optimization Suggestion"
+"No Error"
 """
 
 
@@ -116,44 +138,41 @@ Allowed errorType values:
 
 def clean_json_response(raw_text: str) -> str:
     """
-    Removes Markdown code fences and surrounding whitespace
-    from Gemini's response.
+    Removes Markdown code fences if Gemini accidentally returns them.
     """
 
-    text = raw_text.strip()
+    text = (raw_text or "").strip()
 
     # Remove ```json ... ```
-    if text.startswith("```"):
-        text = re.sub(
-            r"^```(?:json)?\s*",
-            "",
-            text,
-            flags=re.IGNORECASE
-        )
+    text = re.sub(
+        r"^```(?:json)?\s*",
+        "",
+        text,
+        flags=re.IGNORECASE
+    )
 
-        text = re.sub(
-            r"\s*```$",
-            "",
-            text
-        )
+    text = re.sub(
+        r"\s*```$",
+        "",
+        text
+    )
 
     return text.strip()
 
 
 # ============================================================
-# GEMINI REQUEST HELPER
+# GEMINI REQUEST
 # ============================================================
 
-def _call_gemini(payload: Dict[str, Any]) -> Dict[str, Any]:
+def _call_gemini(
+    payload: Dict[str, Any],
+    retries: int = 3
+) -> Dict[str, Any]:
     """
-    Sends a request to Gemini with retry handling.
+    Send a request to Gemini.
 
-    Retries temporary errors such as:
-    429 Too Many Requests
-    500 Internal Server Error
-    502 Bad Gateway
-    503 Service Unavailable
-    504 Gateway Timeout
+    Retries temporary 503/429 errors because Gemini can occasionally
+    become temporarily unavailable during high demand.
     """
 
     api_key = os.environ.get("GEMINI_API_KEY", "")
@@ -163,129 +182,89 @@ def _call_gemini(payload: Dict[str, Any]) -> Dict[str, Any]:
             "GEMINI_API_KEY is not configured in the environment."
         )
 
-    url = (
-        f"{GEMINI_API_BASE}/models/"
-        f"{GEMINI_MODEL}:generateContent"
-        f"?key={api_key}"
+    model = os.environ.get(
+        "GEMINI_MODEL",
+        GEMINI_MODEL
     )
 
-    request_data = json.dumps(payload).encode("utf-8")
+    url = GEMINI_API_URL.format(
+        model=model,
+        key=api_key
+    )
 
-    req = urllib.request.Request(
+    request = urllib.request.Request(
         url,
-        data=request_data,
+        data=json.dumps(payload).encode("utf-8"),
         headers={
             "Content-Type": "application/json",
             "Accept": "application/json",
-            "User-Agent": "CodeFix-AI/1.0"
+            "User-Agent": "CodeFix-AI"
         },
         method="POST"
     )
 
     last_error = None
 
-    for attempt in range(MAX_RETRIES):
-
+    for attempt in range(retries):
         try:
-            with urllib.request.urlopen(req, timeout=45) as response:
+            with urllib.request.urlopen(
+                request,
+                timeout=60
+            ) as response:
 
                 response_body = response.read().decode("utf-8")
 
                 return json.loads(response_body)
 
-        except urllib.error.HTTPError as http_err:
+        except urllib.error.HTTPError as error:
 
-            status_code = http_err.code
+            error_body = error.read().decode("utf-8", errors="replace")
 
-            try:
-                error_body = http_err.read().decode("utf-8")
-            except Exception:
-                error_body = ""
+            # Gemini may temporarily return 503 when the model is busy.
+            if error.code in (429, 500, 502, 503, 504):
 
-            last_error = http_err
-
-            print(
-                f"[Gemini] HTTP {status_code} "
-                f"(attempt {attempt + 1}/{MAX_RETRIES})"
-            )
-
-            # Temporary Gemini problem.
-            if status_code in RETRYABLE_STATUS_CODES:
-
-                if attempt < MAX_RETRIES - 1:
-
-                    delay = RETRY_DELAYS[
-                        min(attempt, len(RETRY_DELAYS) - 1)
-                    ]
-
-                    print(
-                        f"[Gemini] Temporary error. "
-                        f"Retrying in {delay} second(s)..."
-                    )
-
-                    time.sleep(delay)
-                    continue
-
-                # All retries failed.
-                raise RuntimeError(
-                    f"Gemini API HTTP {status_code}: {error_body}"
+                last_error = RuntimeError(
+                    f"Gemini API HTTP {error.code}: {error_body}"
                 )
 
-            # Permanent API error.
-            raise RuntimeError(
-                f"Gemini API HTTP {status_code}: {error_body}"
-            )
-
-        except urllib.error.URLError as url_err:
-
-            last_error = url_err
-
-            print(
-                f"[Gemini] Network error "
-                f"(attempt {attempt + 1}/{MAX_RETRIES}): {url_err}"
-            )
-
-            if attempt < MAX_RETRIES - 1:
-
-                delay = RETRY_DELAYS[
-                    min(attempt, len(RETRY_DELAYS) - 1)
-                ]
-
-                time.sleep(delay)
-                continue
+                if attempt < retries - 1:
+                    # 2 sec, then 4 sec, then 8 sec
+                    time.sleep(2 ** attempt)
+                    continue
 
             raise RuntimeError(
-                "Unable to connect to the Gemini API."
+                f"Gemini API HTTP {error.code}: {error_body}"
             )
 
-        except json.JSONDecodeError as json_err:
+        except urllib.error.URLError as error:
 
-            raise ValueError(
-                f"Gemini returned invalid JSON: {str(json_err)}"
+            last_error = RuntimeError(
+                f"Unable to connect to Gemini API: {error}"
             )
 
-        except Exception as err:
-
-            last_error = err
-
-            print(
-                f"[Gemini] Unexpected error "
-                f"(attempt {attempt + 1}/{MAX_RETRIES}): {err}"
-            )
-
-            if attempt < MAX_RETRIES - 1:
-
-                delay = RETRY_DELAYS[
-                    min(attempt, len(RETRY_DELAYS) - 1)
-                ]
-
-                time.sleep(delay)
+            if attempt < retries - 1:
+                time.sleep(2 ** attempt)
                 continue
 
-            raise
+            raise last_error
+
+        except TimeoutError as error:
+
+            last_error = RuntimeError(
+                f"Gemini API request timed out: {error}"
+            )
+
+            if attempt < retries - 1:
+                time.sleep(2 ** attempt)
+                continue
+
+            raise last_error
+
+    if last_error:
+        raise last_error
 
     raise RuntimeError(
-        f"Gemini request failed: {last_error}"
+        "Gemini API request failed."
     )
 
 
@@ -295,17 +274,19 @@ def _call_gemini(payload: Dict[str, Any]) -> Dict[str, Any]:
 
 def _extract_gemini_text(response_data: Dict[str, Any]) -> str:
     """
-    Extracts generated text from Gemini response.
+    Safely extracts generated text from Gemini response.
     """
 
     candidates = response_data.get("candidates", [])
 
     if not candidates:
         raise ValueError(
-            "No response was generated by Gemini."
+            "Gemini returned no candidates."
         )
 
-    content = candidates[0].get("content", {})
+    candidate = candidates[0]
+
+    content = candidate.get("content", {})
 
     parts = content.get("parts", [])
 
@@ -314,27 +295,113 @@ def _extract_gemini_text(response_data: Dict[str, Any]) -> str:
             "Gemini returned an empty response."
         )
 
-    text_parts = []
+    text = parts[0].get("text", "")
 
-    for part in parts:
-
-        if isinstance(part, dict):
-
-            text = part.get("text")
-
-            if text:
-                text_parts.append(text)
-
-    if not text_parts:
+    if not text:
         raise ValueError(
-            "Gemini response did not contain text."
+            "Gemini returned empty text."
         )
 
-    return "".join(text_parts).strip()
+    return text
 
 
 # ============================================================
-# ANALYZE CODE
+# NORMALIZE ANALYSIS
+# ============================================================
+
+def _normalize_analysis(
+    parsed_json: Dict[str, Any],
+    original_code: str
+) -> Dict[str, Any]:
+    """
+    Ensures the frontend always receives the expected fields.
+    """
+
+    suggestions = parsed_json.get("suggestions", [])
+
+    if not isinstance(suggestions, list):
+        suggestions = []
+
+    suggestions = [
+        str(item)
+        for item in suggestions
+    ]
+
+    line = parsed_json.get("line")
+
+    if line is not None:
+        try:
+            line = int(line)
+        except (TypeError, ValueError):
+            line = None
+
+    has_error = bool(
+        parsed_json.get("hasError", False)
+    )
+
+    corrected_code = parsed_json.get(
+        "correctedCode",
+        original_code
+    )
+
+    if not isinstance(corrected_code, str):
+        corrected_code = original_code
+
+    return {
+        "hasError": has_error,
+
+        "errorType": str(
+            parsed_json.get(
+                "errorType",
+                "No Error"
+            )
+        ),
+
+        "line": line,
+
+        "errorMessage": str(
+            parsed_json.get(
+                "errorMessage",
+                "Analysis complete."
+            )
+        ),
+
+        "offendingCode": str(
+            parsed_json.get(
+                "offendingCode",
+                ""
+            )
+        ),
+
+        "explanation": str(
+            parsed_json.get(
+                "explanation",
+                ""
+            )
+        ),
+
+        "whyItHappened": str(
+            parsed_json.get(
+                "whyItHappened",
+                ""
+            )
+        ),
+
+        "howToFix": str(
+            parsed_json.get(
+                "howToFix",
+                ""
+            )
+        ),
+
+        "correctedCode": corrected_code,
+
+        "suggestions": suggestions
+    }
+
+
+# ============================================================
+# CODE ANALYSIS
 # ============================================================
 
 def analyze_code_with_gemini(
@@ -342,40 +409,43 @@ def analyze_code_with_gemini(
     code: str,
     static_hints: Optional[Dict[str, Any]] = None
 ) -> Dict[str, Any]:
-
     """
-    Sends code to Gemini for structured error analysis.
+    Sends code to Gemini and returns structured analysis.
     """
 
-    api_key = os.environ.get("GEMINI_API_KEY", "")
+    api_key = os.environ.get(
+        "GEMINI_API_KEY",
+        ""
+    )
 
     if not api_key:
         raise ValueError(
             "GEMINI_API_KEY is not configured in the environment."
         )
 
-    # --------------------------------------------------------
-    # Static analyzer context
-    # --------------------------------------------------------
-
     static_context = ""
 
-    if static_hints and static_hints.get("has_syntax_error"):
+    if (
+        static_hints
+        and static_hints.get("has_syntax_error")
+    ):
+        static_context = f"""
+A static parser also detected a possible syntax issue.
 
-        static_context = (
-            "\nStatic AST Parser Hint: "
-            f"Detected potential syntax issue on line "
-            f"{static_hints.get('line')}: "
-            f"{static_hints.get('message')}. "
-            f"Offending snippet: "
-            f"'{static_hints.get('offending_line')}'"
-        )
+Line:
+{static_hints.get("line")}
 
-    # --------------------------------------------------------
-    # User prompt
-    # --------------------------------------------------------
+Message:
+{static_hints.get("message")}
 
-    user_prompt = f"""Please analyze the following {language.upper()} code for errors, bugs, or improvements.
+Offending line:
+{static_hints.get("offending_line")}
+"""
+
+    user_prompt = f"""
+Analyze the following {language.upper()} code.
+
+CODE:
 
 ```{language}
 {code}
