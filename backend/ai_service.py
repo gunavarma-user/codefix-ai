@@ -1,32 +1,88 @@
 """
-Gemini AI Service for Code Analysis and Beginner-Friendly Tutoring.
+Gemini AI Service for CodeFix AI.
+
+Handles:
+- AI code analysis
+- Beginner-friendly tutoring
+- Gemini API communication
+- JSON response parsing
+- Temporary Gemini API failures/retries
 """
 
 import os
 import json
 import re
-from typing import Dict, Any, List, Optional
+import time
 import urllib.request
 import urllib.error
+from typing import Dict, Any, List, Optional
+
+
+# ============================================================
+# CONFIGURATION
+# ============================================================
 
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
-GEMINI_MODEL = "gemini-3.7-flash"
+
+# Stable Gemini model suitable for high-volume text/code tasks.
+GEMINI_MODEL = "gemini-2.5-flash"
+
+GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta"
+
+
+# Temporary Gemini errors that are safe to retry.
+RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 504}
+
+# Number of attempts:
+# 1 initial attempt + 2 retries = 3 total attempts.
+MAX_RETRIES = 3
+
+# Seconds between retries.
+RETRY_DELAYS = [1, 3]
+
+
+# ============================================================
+# SYSTEM PROMPT — CODE ANALYSIS
+# ============================================================
 
 SYSTEM_ANALYSIS_PROMPT = """You are CodeFix AI, an expert programming tutor designed specifically for beginners and students.
+
 Your goal is to analyze user-submitted code in Python, C, C++, Java, or JavaScript, detect any errors, explain them in simple, friendly, jargon-free English, and provide full corrected code.
 
 CRITICAL INSTRUCTIONS:
-1. Tone: Warm, encouraging, patient programming tutor.
-2. Simplicity: Avoid confusing academic jargon. Explain concepts using real-world analogies or simple phrasing (e.g. instead of 'TypeError: unsupported operand type', say 'You are trying to combine a number and text. Python cannot add them together without converting the number to text first.').
-3. Line numbers: Accurately locate the line where the error or issue occurs (1-indexed). If it is a whole-file or conceptual issue with unknown line, set line to null.
-4. Corrected Code: Provide the COMPLETE, functional corrected version of the code, properly indented and ready to run.
+
+1. Tone:
+   Warm, encouraging, patient programming tutor.
+
+2. Simplicity:
+   Avoid confusing academic jargon.
+   Explain concepts using real-world analogies or simple phrasing.
+
+3. Line numbers:
+   Accurately locate the line where the error or issue occurs.
+   Line numbers are 1-indexed.
+   If it is a whole-file or conceptual issue with unknown line, set line to null.
+
+4. Corrected Code:
+   Provide the COMPLETE, functional corrected version of the code.
+   The corrected code must be properly formatted and ready to run.
+
 5. If NO error is found:
    - set "hasError": false
    - set "errorType": "No Error"
    - set "errorMessage": "No syntax or runtime errors detected."
-   - explain what the code does well, and provide 2-3 clean code quality or optimization suggestions.
+   - explain what the code does well
+   - provide 2-3 clean code quality or optimization suggestions.
 
-You MUST reply ONLY with a single valid JSON object adhering strictly to this JSON format:
+6. Never invent an error.
+   If the code is valid, clearly say that it is valid.
+
+7. Return ONLY valid JSON.
+   Do not use Markdown code fences.
+   Do not add explanations outside the JSON object.
+
+You MUST reply ONLY with a single valid JSON object adhering strictly to this structure:
+
 {
   "hasError": true,
   "errorType": "Syntax Error",
@@ -43,158 +99,283 @@ You MUST reply ONLY with a single valid JSON object adhering strictly to this JS
   ]
 }
 
-Allowed errorType values: "Syntax Error", "Runtime Error", "Logical Error", "Warning", "Code Quality Issue", "Optimization Suggestion", "No Error".
+Allowed errorType values:
+"Syntax Error",
+"Runtime Error",
+"Logical Error",
+"Warning",
+"Code Quality Issue",
+"Optimization Suggestion",
+"No Error".
 """
+
+
+# ============================================================
+# JSON CLEANING
+# ============================================================
 
 def clean_json_response(raw_text: str) -> str:
-    """Strips markdown code fences and whitespace from JSON response."""
+    """
+    Removes Markdown code fences and surrounding whitespace
+    from Gemini's response.
+    """
+
     text = raw_text.strip()
+
+    # Remove ```json ... ```
     if text.startswith("```"):
-        # Remove opening ```json or ```
-        text = re.sub(r"^```(?:json)?\s*", "", text, flags=re.IGNORECASE)
-        # Remove closing ```
-        text = re.sub(r"\s*```$", "", text)
+        text = re.sub(
+            r"^```(?:json)?\s*",
+            "",
+            text,
+            flags=re.IGNORECASE
+        )
+
+        text = re.sub(
+            r"\s*```$",
+            "",
+            text
+        )
+
     return text.strip()
 
-def analyze_code_with_gemini(language: str, code: str, static_hints: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+
+# ============================================================
+# GEMINI REQUEST HELPER
+# ============================================================
+
+def _call_gemini(payload: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Sends code to Gemini API for structured error analysis.
+    Sends a request to Gemini with retry handling.
+
+    Retries temporary errors such as:
+    429 Too Many Requests
+    500 Internal Server Error
+    502 Bad Gateway
+    503 Service Unavailable
+    504 Gateway Timeout
     """
+
     api_key = os.environ.get("GEMINI_API_KEY", "")
+
     if not api_key:
-        raise ValueError("GEMINI_API_KEY is not configured in the environment.")
+        raise ValueError(
+            "GEMINI_API_KEY is not configured in the environment."
+        )
 
-    static_context = ""
-    if static_hints and static_hints.get("has_syntax_error"):
-        static_context = f"\nStatic AST Parser Hint: Detected potential syntax issue on line {static_hints.get('line')}: {static_hints.get('message')}. Offending snippet: '{static_hints.get('offending_line')}'"
+    url = (
+        f"{GEMINI_API_BASE}/models/"
+        f"{GEMINI_MODEL}:generateContent"
+        f"?key={api_key}"
+    )
 
-    user_prompt = f"""Please analyze the following {language.upper()} code for errors, bugs, or improvements:
+    request_data = json.dumps(payload).encode("utf-8")
 
-```{language}
-{code}
-```
-{static_context}
-
-Provide your beginner-friendly tutor analysis as valid JSON matching the specified structure."""
-
-    payload = {
-        "contents": [
-            {
-                "parts": [
-                    {"text": user_prompt}
-                ]
-            }
-        ],
-        "systemInstruction": {
-            "parts": [
-                {"text": SYSTEM_ANALYSIS_PROMPT}
-            ]
-        },
-        "generationConfig": {
-            "responseMimeType": "application/json",
-        }
-    }
-
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent?key={api_key}"
-    
     req = urllib.request.Request(
         url,
-        data=json.dumps(payload).encode("utf-8"),
+        data=request_data,
         headers={
             "Content-Type": "application/json",
-            "User-Agent": "aistudio-build"
+            "Accept": "application/json",
+            "User-Agent": "CodeFix-AI/1.0"
         },
         method="POST"
     )
 
-    try:
-        with urllib.request.urlopen(req, timeout=30) as response:
-            res_data = json.loads(response.read().decode("utf-8"))
-            candidates = res_data.get("candidates", [])
-            if not candidates:
-                raise ValueError("No response generated by Gemini.")
-            
-            raw_text = candidates[0].get("content", {}).get("parts", [{}])[0].get("text", "")
-            cleaned = clean_json_response(raw_text)
-            parsed_json = json.loads(cleaned)
+    last_error = None
 
-            # Ensure all required keys exist
-            return {
-                "hasError": bool(parsed_json.get("hasError", False)),
-                "errorType": str(parsed_json.get("errorType", "No Error")),
-                "line": parsed_json.get("line"),
-                "errorMessage": str(parsed_json.get("errorMessage", "Analysis complete")),
-                "offendingCode": str(parsed_json.get("offendingCode", "")),
-                "explanation": str(parsed_json.get("explanation", "")),
-                "whyItHappened": str(parsed_json.get("whyItHappened", "")),
-                "howToFix": str(parsed_json.get("howToFix", "")),
-                "correctedCode": str(parsed_json.get("correctedCode", code)),
-                "suggestions": list(parsed_json.get("suggestions", []))
-            }
-    except urllib.error.HTTPError as http_err:
-        err_body = http_err.read().decode("utf-8")
-        raise RuntimeError(f"Gemini API HTTP {http_err.code}: {err_body}")
-    except json.JSONDecodeError as json_err:
-        raise ValueError(f"Unable to parse AI response as JSON: {str(json_err)}")
+    for attempt in range(MAX_RETRIES):
 
-def generate_chat_reply(
-    message: str,
-    language: str,
-    code: str,
-    analysis: Optional[Dict[str, Any]] = None,
-    history: Optional[List[Dict[str, str]]] = None
-) -> str:
-    """
-    Handles follow-up questions from the user with full code and analysis context.
-    """
-    api_key = os.environ.get("GEMINI_API_KEY", "")
-    if not api_key:
-        raise ValueError("GEMINI_API_KEY is not configured in the environment.")
+        try:
+            with urllib.request.urlopen(req, timeout=45) as response:
 
-    system_instruction = f"""You are CodeFix AI, a patient and friendly code tutor chatting with a beginner student.
-You have the context of the user's active code, the detected error, and the proposed fix in {language.upper()}.
-Always be helpful, encouraging, concise, and clear. If they ask to explain line-by-line, walk them through it step-by-step.
-If they ask for alternative solutions, show a clean alternative with a short explanation."""
+                response_body = response.read().decode("utf-8")
 
-    analysis_summary = ""
-    if analysis:
-        analysis_summary = f"""
-Current Analysis Context:
-- Error Type: {analysis.get('errorType')}
-- Error Message: {analysis.get('errorMessage')}
-- Error Line: {analysis.get('line')}
-- Explanation: {analysis.get('explanation')}
-- Corrected Code:
-{analysis.get('correctedCode')}
-"""
+                return json.loads(response_body)
 
-    prompt = f"""Current Code ({language.upper()}):
-```{language}
-{code}
-```
-{analysis_summary}
+        except urllib.error.HTTPError as http_err:
 
-User Question: {message}
+            status_code = http_err.code
 
-Please reply in a helpful, conversational, beginner-friendly manner."""
+            try:
+                error_body = http_err.read().decode("utf-8")
+            except Exception:
+                error_body = ""
 
-    payload = {
-        "contents": [{"parts": [{"text": prompt}]}],
-        "systemInstruction": {"parts": [{"text": system_instruction}]},
-        "generationConfig": {"temperature": 0.4}
-    }
+            last_error = http_err
 
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent?key={api_key}"
-    req = urllib.request.Request(
-        url,
-        data=json.dumps(payload).encode("utf-8"),
-        headers={"Content-Type": "application/json", "User-Agent": "aistudio-build"},
-        method="POST"
+            print(
+                f"[Gemini] HTTP {status_code} "
+                f"(attempt {attempt + 1}/{MAX_RETRIES})"
+            )
+
+            # Temporary Gemini problem.
+            if status_code in RETRYABLE_STATUS_CODES:
+
+                if attempt < MAX_RETRIES - 1:
+
+                    delay = RETRY_DELAYS[
+                        min(attempt, len(RETRY_DELAYS) - 1)
+                    ]
+
+                    print(
+                        f"[Gemini] Temporary error. "
+                        f"Retrying in {delay} second(s)..."
+                    )
+
+                    time.sleep(delay)
+                    continue
+
+                # All retries failed.
+                raise RuntimeError(
+                    f"Gemini API HTTP {status_code}: {error_body}"
+                )
+
+            # Permanent API error.
+            raise RuntimeError(
+                f"Gemini API HTTP {status_code}: {error_body}"
+            )
+
+        except urllib.error.URLError as url_err:
+
+            last_error = url_err
+
+            print(
+                f"[Gemini] Network error "
+                f"(attempt {attempt + 1}/{MAX_RETRIES}): {url_err}"
+            )
+
+            if attempt < MAX_RETRIES - 1:
+
+                delay = RETRY_DELAYS[
+                    min(attempt, len(RETRY_DELAYS) - 1)
+                ]
+
+                time.sleep(delay)
+                continue
+
+            raise RuntimeError(
+                "Unable to connect to the Gemini API."
+            )
+
+        except json.JSONDecodeError as json_err:
+
+            raise ValueError(
+                f"Gemini returned invalid JSON: {str(json_err)}"
+            )
+
+        except Exception as err:
+
+            last_error = err
+
+            print(
+                f"[Gemini] Unexpected error "
+                f"(attempt {attempt + 1}/{MAX_RETRIES}): {err}"
+            )
+
+            if attempt < MAX_RETRIES - 1:
+
+                delay = RETRY_DELAYS[
+                    min(attempt, len(RETRY_DELAYS) - 1)
+                ]
+
+                time.sleep(delay)
+                continue
+
+            raise
+
+    raise RuntimeError(
+        f"Gemini request failed: {last_error}"
     )
 
-    with urllib.request.urlopen(req, timeout=30) as response:
-        res_data = json.loads(response.read().decode("utf-8"))
-        candidates = res_data.get("candidates", [])
-        if not candidates:
-            return "I apologize, but I could not generate a response. Please ask again!"
-        return candidates[0].get("content", {}).get("parts", [{}])[0].get("text", "")
+
+# ============================================================
+# EXTRACT GEMINI TEXT
+# ============================================================
+
+def _extract_gemini_text(response_data: Dict[str, Any]) -> str:
+    """
+    Extracts generated text from Gemini response.
+    """
+
+    candidates = response_data.get("candidates", [])
+
+    if not candidates:
+        raise ValueError(
+            "No response was generated by Gemini."
+        )
+
+    content = candidates[0].get("content", {})
+
+    parts = content.get("parts", [])
+
+    if not parts:
+        raise ValueError(
+            "Gemini returned an empty response."
+        )
+
+    text_parts = []
+
+    for part in parts:
+
+        if isinstance(part, dict):
+
+            text = part.get("text")
+
+            if text:
+                text_parts.append(text)
+
+    if not text_parts:
+        raise ValueError(
+            "Gemini response did not contain text."
+        )
+
+    return "".join(text_parts).strip()
+
+
+# ============================================================
+# ANALYZE CODE
+# ============================================================
+
+def analyze_code_with_gemini(
+    language: str,
+    code: str,
+    static_hints: Optional[Dict[str, Any]] = None
+) -> Dict[str, Any]:
+
+    """
+    Sends code to Gemini for structured error analysis.
+    """
+
+    api_key = os.environ.get("GEMINI_API_KEY", "")
+
+    if not api_key:
+        raise ValueError(
+            "GEMINI_API_KEY is not configured in the environment."
+        )
+
+    # --------------------------------------------------------
+    # Static analyzer context
+    # --------------------------------------------------------
+
+    static_context = ""
+
+    if static_hints and static_hints.get("has_syntax_error"):
+
+        static_context = (
+            "\nStatic AST Parser Hint: "
+            f"Detected potential syntax issue on line "
+            f"{static_hints.get('line')}: "
+            f"{static_hints.get('message')}. "
+            f"Offending snippet: "
+            f"'{static_hints.get('offending_line')}'"
+        )
+
+    # --------------------------------------------------------
+    # User prompt
+    # --------------------------------------------------------
+
+    user_prompt = f"""Please analyze the following {language.upper()} code for errors, bugs, or improvements.
+
+```{language}
+{code}
