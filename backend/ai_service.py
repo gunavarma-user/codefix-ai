@@ -13,7 +13,7 @@ from typing import Dict, Any, List, Optional
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 
 # Use a currently available Gemini Flash model.
-GEMINI_MODEL = "gemini-2.5-flash"
+GEMINI_MODEL = "gemini-2.5-flash-lite"
 
 
 SYSTEM_ANALYSIS_PROMPT = """
