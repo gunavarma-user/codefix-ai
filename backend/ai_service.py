@@ -92,7 +92,6 @@ Provide your beginner-friendly tutor analysis as valid JSON matching the specifi
         },
         "generationConfig": {
             "responseMimeType": "application/json",
-            "temperature": 0.2
         }
     }
 
