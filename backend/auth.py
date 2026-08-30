@@ -11,8 +11,8 @@ from typing import Optional
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
-import backend.models as models
-from backend.database import get_db
+import models as models
+from database import get_db
 
 SECRET_KEY = os.environ.get("JWT_SECRET", "codefix-ai-secret-key-2026-prod-secure")
 ALGORITHM = "HS256"
